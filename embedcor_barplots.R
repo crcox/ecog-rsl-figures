@@ -6,7 +6,7 @@ library(ggplot2)
 source('R/p_adjust_WestfallYoung.R')
 source('R/utils.R')
 
-data_root <- "data/REANALYSIS_2022DEC28"
+data_root <- "data/REANALYSIS_2023JAN04/"
 window_type <- "OpeningWindow"
 target_type <- "low-rank-target"
 embedding_type <- "subject-embeddings"
@@ -41,12 +41,18 @@ R <- map(file_paths, function(.x) {
       select(model, WindowStart, WindowSize, repetition, starts_with("embedcor_")) %>%
       pivot_longer(
         starts_with("embedcor_"),
-        names_to = c("metric", "subset", "dimension"),
+        names_to = c("metric", "subset", "stat", "dimension"),
         names_sep = "_",
         values_to = "value",
         names_transform = list(dimension = as.numeric)
+      ) %>%
+      pivot_wider(
+        names_from = "stat",
+        values_from = "value"
       )
-  }) %>% filter(WindowSize == window_size)
+  }) %>%
+    filter(WindowSize == window_size) %>%
+    rename(value = mean)
 })
 names(R) <- c("final", "perms")
 
@@ -102,20 +108,27 @@ df <- df %>%
 # Prepare to plot ----
 cpallet <- c(
   "#fc8d62",
+  "#fddcce",
   "#66c2a5",
+  "#d5eee6",
+  "#8da0cb",
   "#8da0cb"
 )
 
 df <- df %>%
   mutate(
-    across(c(metric, dimension, subset), as.factor),
-    color = cpallet[as.numeric(subset)]
+    cond = paste(subset, model, sep = "_"),
+    across(c(metric, dimension, subset, cond), as.factor),
+    color = cpallet[as.numeric(cond)]
   )
+df$color_sig <- if_else(df$pval_fwer < 0.05, df$color, "grey80")
 
 pval_types <- c("fwer", "fdr")
 levels(df$subset) <- c("All", "Ani.", "Inani.")
 
 # BARPLOTS ----
-ggplot(df, aes(x = subset, y = value, fill = model)) +
+ggplot(df, aes(x = subset, y = value, group = model))  +
   geom_bar(stat = "identity", position = position_dodge()) + 
+  geom_errorbar(aes(ymin = value - se, ymax = value + se), position = position_dodge()) + 
+  scale_fill_manual(values = df$color_sig) +
   facet_wrap(~dimension)
