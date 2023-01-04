@@ -107,12 +107,12 @@ df <- df %>%
   
 # Prepare to plot ----
 cpallet <- c(
-  "#fc8d62",
-  "#fddcce",
-  "#66c2a5",
-  "#d5eee6",
-  "#8da0cb",
-  "#8da0cb"
+  all_GrOWL      = "#fc8d62",
+  all_LASSO      = "#fddcce",
+  Animate_GrOWL  = "#66c2a5",
+  Animate_LASSO  = "#d5eee6",
+  Inaniate_GrOWL = "#8da0cb",
+  Inaniate_LASSO = "#8da0cb"
 )
 
 df <- df %>%
