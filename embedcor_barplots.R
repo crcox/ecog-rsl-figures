@@ -132,12 +132,12 @@ levels(df$subset) <- c("All", "Ani.", "Inani.")
     stat = "identity",
     position = position_dodge(.9),
     color = "black",
-    linewidth = 1.25
+    linewidth = 1
   ) + 
   geom_errorbar(
     aes(ymin = value - se, ymax = value + se),
     position = position_dodge(.9),
-    linewidth = 1.25,
+    linewidth = 1,
     width = 0
   ) + 
   scale_fill_manual(values = cpallet) +

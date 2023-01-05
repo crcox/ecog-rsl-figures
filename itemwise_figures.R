@@ -11,11 +11,11 @@ window_type <- "MovingWindow"
 target_type <- "low-rank-target"
 embedding_type <- "subject-embeddings"
 analysis_type <- "itemwise"
-model_types <- c("GrOWL", "LASSO")
+model_type <- "GrOWL"
 
-data_path <- file.path(data_root, window_type, model_types, target_type,
+data_path <- file.path(data_root, window_type, model_type, target_type,
   embedding_type, analysis_type)
-names(data_path) <- model_types
+names(data_path) <- model_type
 x <- c(final = "final.csv", perms = "perm.csv")
 file_paths <- map(x, ~{
   p <- file.path(data_path, .x)
@@ -34,7 +34,7 @@ R <- map(file_paths, function(.x) {
       group_by(WindowStart, WindowSize) %>%
       mutate(
         repetition = 1:n(),
-        model = factor(model_type, levels = model_types)
+        model = factor(model_type, levels = model_type)
       ) %>%
       ungroup() %>%
       select(model, WindowStart, WindowSize, repetition, starts_with("itemcor_")) %>%
@@ -125,7 +125,7 @@ plots <- map(pval_types, function(df, pval_type) {
     pval_var <- paste("pval", pval_type, sep = "_")
     ggplot(df, aes(x = WindowStart, y = value, group = domain)) +
       geom_ribbon(aes(ymin = value - se, ymax = value + se, group = domain), alpha = 0.2, color = NA) +
-      geom_line(aes(color = domain)) +
+      geom_line() +
       geom_point(
         fill = ifelse(df[[pval_var]] < .05, df$color, "white"),
         color =  ifelse(df[[pval_var]] >= .05, df$color, "black"),
@@ -141,12 +141,19 @@ plots <- map(pval_types, function(df, pval_type) {
 )
 names(plots) <- pval_types
 
-plots[[1]]
-plots[[2]]
+plots[["fwer"]]
 
-# BARPLOTS ----
-ggplot(df, aes(x = subset, y = value, group = model))  +
-  geom_bar(stat = "identity", position = position_dodge()) + 
-  geom_errorbar(aes(ymin = value - se, ymax = value + se), position = position_dodge()) + 
-  scale_fill_manual(values = df$color_sig) +
-  facet_wrap(~dimension)
+fig_prefix <- paste(window_type, model_type, analysis_type, target_type, sep = "_")
+iwalk(plots, function(.plot, pval_type, prefix) {
+    ggsave(
+      filename = paste(fig_prefix, paste(pval_type, "pdf", sep = "."), sep = "_"),
+      plot = .plot,
+      device = "pdf",
+      width = 8,
+      height = 3,
+      dpi = 300,
+      units = "in",
+      bg = "white"
+    )
+  }, prefix = fig_prefix
+)

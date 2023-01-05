@@ -9,9 +9,9 @@ source('R/p_adjust_WestfallYoung.R')
 source('R/utils.R')
 source('R/plot_corrprof.R')
 
-data_root <- "data/REANALYSIS_2022DEC28"
+data_root <- "data/REANALYSIS_2023JAN04/"
 window_type <- "OpeningWindow"
-model_type <- "GrOWL"
+model_type <- "LASSO"
 target_type <- "low-rank-target"
 embedding_type <- "subject-embeddings"
 analysis_type <- "embedcor"
@@ -34,11 +34,16 @@ R <- map(file_paths, ~{
     select(WindowStart, WindowSize, repetition, starts_with("embedcor_")) %>%
     pivot_longer(
       starts_with("embedcor_"),
-      names_to = c("metric", "subset", "dimension"),
+      names_to = c("metric", "subset", "stat", "dimension"),
       names_sep = "_",
       values_to = "value",
       names_transform = list(dimension = as.numeric)
-    )
+    ) %>%
+    pivot_wider(
+      names_from = "stat",
+      values_from = "value"
+    ) %>%
+    rename(value = mean)
 })
 names(R) <- c("final", "perms")
 
@@ -116,6 +121,8 @@ plots <- map(pval_types, function(df, pval_type) {
         shape = 21,
         size = 2.5
       ) +
+      geom_hline(yintercept = 0, linetype = 2) +
+      scale_y_continuous("Pearson's r", breaks = c(-.3, 0, .3, .6), limits = c(-.4, .7)) +
       facet_wrap(~dimension) +
       theme_bw() +
       theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
@@ -137,11 +144,3 @@ iwalk(plots, function(.plot, pval_type, prefix) {
     )
   }, prefix = fig_prefix
 )
-
-# BARPLOTS ----
-df_bar <- df %>%
-  filter(WindowSize == 1000)
-
-ggplot(df_bar, aes(x = subset, y = value), ) +
-  geom_bar(stat = "identity") + 
-  facet_wrap(~dimension)
