@@ -109,26 +109,54 @@ df <- df %>%
 cpallet <- c(
   all_GrOWL      = "#fc8d62",
   all_LASSO      = "#fddcce",
-  Animate_GrOWL  = "#66c2a5",
-  Animate_LASSO  = "#d5eee6",
-  Inaniate_GrOWL = "#8da0cb",
-  Inaniate_LASSO = "#8da0cb"
+  animate_GrOWL  = "#66c2a5",
+  animate_LASSO  = "#d5eee6",
+  inanimate_GrOWL = "#8da0cb",
+  inanimate_LASSO = "#8da0cb",
+  nonsig = "grey60"
 )
 
 df <- df %>%
   mutate(
     cond = paste(subset, model, sep = "_"),
-    across(c(metric, dimension, subset, cond), as.factor),
-    color = cpallet[as.numeric(cond)]
+    cond_sig = if_else(pval_fwer < 0.05, cond, "nonsig"),
+    across(c(metric, dimension, subset, cond, cond_sig), as.factor)
   )
-df$color_sig <- if_else(df$pval_fwer < 0.05, df$color, "grey80")
 
 pval_types <- c("fwer", "fdr")
 levels(df$subset) <- c("All", "Ani.", "Inani.")
 
 # BARPLOTS ----
-ggplot(df, aes(x = subset, y = value, group = model))  +
-  geom_bar(stat = "identity", position = position_dodge()) + 
-  geom_errorbar(aes(ymin = value - se, ymax = value + se), position = position_dodge()) + 
-  scale_fill_manual(values = df$color_sig) +
-  facet_wrap(~dimension)
+.plot <- ggplot(df, aes(x = subset, y = value, group = model, fill = cond_sig))  +
+  geom_bar(
+    stat = "identity",
+    position = position_dodge(.9),
+    color = "black",
+    linewidth = 1.25
+  ) + 
+  geom_errorbar(
+    aes(ymin = value - se, ymax = value + se),
+    position = position_dodge(.9),
+    linewidth = 1.25,
+    width = 0
+  ) + 
+  scale_fill_manual(values = cpallet) +
+  facet_wrap(~dimension) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position="none"
+  )
+
+fig_prefix <- paste(window_type, "barplot", analysis_type, target_type, window_size, sep = "_")
+ggsave(
+  filename = paste(fig_prefix, paste("fwer", "pdf", sep = "."), sep = "_"),
+  plot = .plot,
+  device = "pdf",
+  width = 8,
+  height = 3,
+  dpi = 300,
+  units = "in",
+  bg = "white"
+)
