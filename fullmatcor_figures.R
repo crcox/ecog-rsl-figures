@@ -10,12 +10,12 @@ source('R/p_adjust_WestfallYoung.R')
 source('R/utils.R')
 source('R/plot_corrprof.R')
 
-data_root <- "data/REANALYSIS_2022DEC31"
-window_type <- "OpeningWindow"
+data_root <- "data/REANALYSIS_2023JAN04/"
+window_type <- "MovingWindow"
 model_type <- "GrOWL"
 target_type <- "low-rank-target"
 embedding_type <- "subject-embeddings"
-analysis_type <- "embedcor"
+analysis_type <- "fullmat"
 
 data_path <- file.path(data_root, window_type, model_type, target_type,
   embedding_type, analysis_type)
@@ -25,27 +25,25 @@ file_paths <- file.path(data_path, c("final.csv", "perm.csv"))
 
 # Load data ----
 
-# Apply a series of transformation to each data frame as it is loaded.
+# Apply a series of transformations to each data frame as it is loaded.
 # The "repetition" column will index random permutations
 R <- map(file_paths, ~{
   read_csv(.) %>%
     group_by(WindowStart, WindowSize) %>%
     mutate(repetition = 1:n()) %>%
     ungroup() %>%
-    select(WindowStart, WindowSize, repetition, starts_with("embedcor_")) %>%
-    rename_with(~{
-      . %>%
-        str_split(pattern = "_")[[1]] %>%
-        append("mean", 2) %>%
-        str_c(sep = "_")
-    }, starts_with("embedcor_") & !contains("_std_")) %>%
+    select(WindowStart, WindowSize, repetition, starts_with("fullcor_")) %>%
     pivot_longer(
-      starts_with("embedcor_"),
-      names_to = c("metric", "subset", "stat", "dimension"),
+      starts_with("fullcor_"),
+      names_to = c("metric", "subset", "stat"),
       names_sep = "_",
-      values_to = "value",
-      names_transform = list(dimension = as.numeric)
-    )
+      values_to = "value"
+    ) %>%
+    pivot_wider(
+      names_from = "stat",
+      values_from = "value"
+    ) %>%
+    rename(value = mean)
 })
 names(R) <- c("final", "perms")
 
@@ -58,7 +56,7 @@ names(R) <- c("final", "perms")
 df <- left_join(
   R$final,
   R$perms %>%
-    group_by(WindowSize, metric, dimension, subset) %>%
+    group_by(WindowStart, metric, subset) %>%
     summarize(perms = list(sort(value))) %>%
     ungroup()
 )
@@ -98,7 +96,17 @@ df <- df %>%
   ) %>%
   ungroup()
   
+# !!! UNFINISHED !!!
+
 # Prepare to plot ----
+cpallet <- c(
+  all_GrOWL      = "#fc8d62",
+  all_LASSO      = "#fddcce",
+  Animate_GrOWL  = "#66c2a5",
+  Animate_LASSO  = "#d5eee6",
+  Inaniate_GrOWL = "#8da0cb",
+  Inaniate_LASSO = "#8da0cb"
+)
 cpallet <- c(
   "#fc8d62",
   "#66c2a5",
