@@ -4,58 +4,28 @@ library(readr)
 library(tidyr)
 library(ggplot2)
 source('R/p_adjust_WestfallYoung.R')
-source('R/utils.R')
+source("R/read_results.R")
+source("R/barplotfun.R")
+source("R/plotsavefun.R")
 
-figure_dir <- "figures/JAN05_refactor/"
-data_root <- "data/REANALYSIS_2023JAN05/"
-window_type <- "OpeningWindow"
-target_type <- "low-rank-target"
-embedding_type <- "subject-embeddings"
-analysis_type <- "embedcor"
-window_size <- 1000
-model_types <- c("GrOWL", "LASSO")
-
-data_path <- file.path(data_root, window_type, model_types, target_type,
-  embedding_type, analysis_type)
-names(data_path) <- model_types
-x <- c(final = "final.csv", perms = "perm.csv")
-file_paths <- map(x, ~{
-  p <- file.path(data_path, .x)
-  names(p) <- names(data_path)
-  return(p)
-})
-  
+figure_dir <- "figures/JAN09_refactor/"
+data_conds <- expand_grid(
+  data_root = "data/REANALYSIS_2023JAN05",
+  window_type = "OpeningWindow",
+  model_type = c("GrOWL", "LASSO"),
+  target_type = "low-rank-target",
+  embedding_type = "subject-embeddings",
+  analysis_type = "embedcor"
+)
 
 # Load data ----
-
-# Apply a series of transformation to each data frame as it is loaded.
-# The "repetition" column will index random permutations
-R <- map(file_paths, function(.x) {
-  imap_dfr(.x, function(filename, model_type) {
-    read_csv(filename) %>%
-      group_by(WindowStart, WindowSize) %>%
-      mutate(
-        repetition = 1:n(),
-        model = factor(model_type, levels = model_types)
-      ) %>%
-      ungroup() %>%
-      select(model, WindowStart, WindowSize, repetition, starts_with("embedcor_")) %>%
-      pivot_longer(
-        starts_with("embedcor_"),
-        names_to = c("metric", "subset", "stat", "dimension"),
-        names_sep = "_",
-        values_to = "value",
-        names_transform = list(dimension = as.numeric)
-      ) %>%
-      pivot_wider(
-        names_from = "stat",
-        values_from = "value"
-      )
-  }) %>%
-    filter(WindowSize == window_size) %>%
-    rename(value = mean)
-})
-names(R) <- c("final", "perms")
+# Will produce a list containing two data frames: one containing the "true"
+# final results, and the other containing all the values obtained by repeated
+# random permutation of the rows of the target embedding before model fitting.
+R <- map(c(final = "final", perms = "perm"), function(.data, result_type, window_size) {
+  pmap_dfr(.data, read_results, result_type = result_type) %>%
+    filter(WindowSize == window_size)
+}, .data = data_conds, window_size = 1000)
 
 # Compute p-values ----
 # Merge the permutation distribution for each condition into the table of true
@@ -66,7 +36,7 @@ names(R) <- c("final", "perms")
 df <- left_join(
   R$final,
   R$perms %>%
-    group_by(model, WindowSize, metric, dimension, subset) %>%
+    group_by(across(-c(repetition, value))) %>%
     summarize(perms = list(sort(value))) %>%
     ungroup()
 )
@@ -99,7 +69,7 @@ df <- df %>%
 # Recent review in neuroimaging context: https://doi.org/10.1016/j.neuroimage.2020.116760
 # See also: https://dx.doi.org/10.4310/SII.2013.v6.n1.a8
 df <- df %>%
-  group_by(model, metric, dimension) %>%
+  group_by(across(-c(WindowStart, WindowSize, subset, value, std, se, zval, cval, pval, perms))) %>%
   mutate(
     pval_fdr = p.adjust(pval, method = "BH"),
     pval_fwer = p_adjust_WestfallYoung(value, matrix(unlist(perms), ncol = n()))
@@ -107,75 +77,33 @@ df <- df %>%
   ungroup()
   
 # Prepare to plot ----
+tmp <- map(data_conds %>% select(-data_root, -model_type), unique)
+tmp$value_type <- c("value", "cval")
+tmp$pval_type <- c("fwer", "fdr")
+plot_conds <- do.call(expand_grid, tmp)
+
 cpallet <- list(
   fill = c(
-    all_GrOWL      = "#66c2a5",
-    all_LASSO      = "#d5eee6",
-    animate_GrOWL  = "#fc8d62",
-    animate_LASSO  = "#fddcce",
+    all_GrOWL       = "#66c2a5",
+    all_LASSO       = "#d5eee6",
+    animate_GrOWL   = "#fc8d62",
+    animate_LASSO   = "#fddcce",
     inanimate_GrOWL = "#8da0cb",
     inanimate_LASSO = "lightblue",
-    nonsig_GrOWL = "grey20",
-    nonsig_LASSO = "grey80"
+    nonsig_GrOWL    = "grey20",
+    nonsig_LASSO    = "grey80"
   )
 )
 
 df <- df %>%
   mutate(
-    cond = paste(subset, model, sep = "_"),
-    cond_sig_fdr = if_else(pval_fdr < 0.05, cond, paste("nonsig", model, sep = "_")),
-    cond_sig_fwer = if_else(pval_fwer < 0.05, cond, paste("nonsig", model, sep = "_")),
+    cond = paste(subset, model_type, sep = "_"),
+    cond_sig_fdr = if_else(pval_fdr < 0.05, cond, paste("nonsig", model_type, sep = "_")),
+    cond_sig_fwer = if_else(pval_fwer < 0.05, cond, paste("nonsig", model_type, sep = "_")),
     across(c(metric, dimension, subset, starts_with("cond")), as.factor)
   )
 
-pval_types <- c("fwer", "fdr")
-value_types <- c("value", "cval")
-plot_conds <- expand_grid(
-  value_type = value_types,
-  pval_type = pval_types
-)
-levels(df$subset) <- c("All", "Ani.", "Inani.")
 
-# BARPLOTS ----
-barplotfun <- function(df, value_type, pval_type, cpallet) {
-  y <- ensym(value_type)
-  fill <- paste("cond_sig", pval_type, sep = "_")
-  fill <- ensym(fill)
-  ggplot(df, aes(x = subset, y = !!y, group = model, fill = !!fill))  +
-    geom_bar(
-      stat = "identity",
-      position = position_dodge(.9),
-      color = "black",
-      linewidth = 1
-    ) + 
-    geom_errorbar(
-      aes(ymin = !!y - se, ymax = !!y + se),
-      position = position_dodge(.9),
-      linewidth = 1,
-      width = 0
-    ) + 
-    scale_fill_manual(values = cpallet$fill) +
-    facet_wrap(~dimension) +
-    theme_bw() +
-    theme(
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      legend.position="none"
-    )
-}
+# Generate and save plots ----
 plot_conds$.plot <- pmap(plot_conds, barplotfun, df = df, cpallet = cpallet)
-
-barplotsavefun <- function(prefix, value_type, pval_type, .plot) {
-  ggsave(
-    filename = paste(paste(prefix, value_type, pval_type, sep = "_"), ".pdf", sep = ""),
-    plot = .plot,
-    device = "pdf",
-    width = 8,
-    height = 3,
-    dpi = 300,
-    units = "in",
-    bg = "white"
-  )
-}
-fig_prefix <- file.path(figure_dir, paste(window_type, "barplot", analysis_type, window_size, sep = "_"))
-pwalk(plot_conds, barplotsavefun, prefix = fig_prefix)
+pwalk(plot_conds, plotsavefun, outdir = file.path(figure_dir, "barplots"))
