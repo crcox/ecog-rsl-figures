@@ -9,7 +9,8 @@ source('R/p_adjust_WestfallYoung.R')
 source('R/utils.R')
 source('R/plot_corrprof.R')
 
-data_root <- "data/REANALYSIS_2023JAN04/"
+figure_dir <- "figures/JAN05_refactor/"
+data_root <- "data/REANALYSIS_2023JAN05/"
 window_type <- "OpeningWindow"
 model_type <- "LASSO"
 target_type <- "low-rank-target"
@@ -97,50 +98,70 @@ df <- df %>%
   ungroup()
   
 # Prepare to plot ----
-cpallet <- c(
-  "#fc8d62",
-  "#66c2a5",
-  "#8da0cb"
+pval_types <- c("fwer", "fdr")
+value_types <- c("value", "cval")
+plot_conds <- expand_grid(
+  value_type = value_types,
+  pval_type = pval_types
 )
-
+cpallet <- list(
+  color = c(
+    all              = "#000000",
+    animate          = "#000000",
+    inanimate        = "#000000",
+    nonsig_all       = "#66c2a5",
+    nonsig_animate   = "#fc8d62",
+    nonsig_inanimate = "#8da0cb"
+  ),
+  fill = c(
+    all              = "#66c2a5",
+    animate          = "#fc8d62",
+    inanimate        = "#8da0cb",
+    nonsig_all       = "#ffffff",
+    nonsig_animate   = "#ffffff",
+    nonsig_inanimate = "#ffffff"
+  )
+)
 df <- df %>%
   mutate(
-    across(c(metric, dimension, subset), as.factor),
-    color = cpallet[as.numeric(subset)]
+    subset_fdr = if_else(pval_fdr < 0.05, subset, paste("nonsig", subset, sep = "_")),
+    subset_fwer = if_else(pval_fwer < 0.05, subset, paste("nonsig", subset, sep = "_")),
+    across(c(metric, dimension, starts_with("subset")), as.factor)
   )
 
-pval_types <- c("fwer", "fdr")
-plots <- map(pval_types, function(df, pval_type) {
-    pval_var <- paste("pval", pval_type, sep = "_")
-    ggplot(df, aes(x = WindowSize, y = value, group = subset)) +
-      geom_ribbon(aes(ymin = value - se, ymax = value + se, group = subset), alpha = 0.2, color = NA) +
-      geom_line() +
-      geom_point(
-        fill = ifelse(df[[pval_var]] < .05, df$color, "white"),
-        color =  ifelse(df[[pval_var]] >= .05, df$color, "black"),
-        shape = 21,
-        size = 2.5
-      ) +
-      geom_hline(yintercept = 0, linetype = 2) +
-      scale_y_continuous("Pearson's r", breaks = c(-.3, 0, .3, .6), limits = c(-.4, .7)) +
-      facet_wrap(~dimension) +
-      theme_bw() +
-      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-  }, df = df
-)
-names(plots) <- pval_types
-
-fig_prefix <- paste(window_type, model_type, analysis_type, target_type, sep = "_")
-iwalk(plots, function(.plot, pval_type, prefix) {
-    ggsave(
-      filename = paste(fig_prefix, paste(pval_type, "pdf", sep = "."), sep = "_"),
-      plot = .plot,
-      device = "pdf",
-      width = 8,
-      height = 3,
-      dpi = 300,
-      units = "in",
-      bg = "white"
+seriesplotfun <- function(df, value_type, pval_type, cpallet) {
+  y <- ensym(value_type)
+  subset_sig <- paste("subset", pval_type, sep = "_")
+  subset_sig <- ensym(subset_sig)
+  ggplot(df, aes(x = WindowSize, y = !!y, group = subset, color = !!subset_sig, fill = !!subset_sig)) +
+    geom_ribbon(aes(ymin = !!y - se, ymax = !!y + se, group = subset), alpha = 0.2, color = NA, fill = "grey40") +
+    geom_line(color = "black") +
+    geom_point(shape = 21, size = 2.5) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    scale_color_manual(values = cpallet$color) +
+    scale_fill_manual(values = cpallet$fill) +
+    scale_y_continuous("Pearson's r", breaks = c(-.3, 0, .3, .6), limits = c(-.42, .7)) +
+    facet_wrap(~dimension) +
+    theme_bw() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.position="none"
     )
-  }, prefix = fig_prefix
-)
+}
+plot_conds$.plot <- pmap(plot_conds, seriesplotfun, df = df, cpallet = cpallet)
+
+seriesplotsavefun <- function(prefix, value_type, pval_type, .plot) {
+  ggsave(
+    filename = paste(paste(prefix, value_type, pval_type, sep = "_"), ".pdf", sep = ""),
+    plot = .plot,
+    device = "pdf",
+    width = 8,
+    height = 3,
+    dpi = 300,
+    units = "in",
+    bg = "white"
+  )
+}
+fig_prefix <- file.path(figure_dir, paste(window_type, model_type, analysis_type, sep = "_"))
+pwalk(plot_conds, seriesplotsavefun, prefix = fig_prefix)

@@ -6,7 +6,8 @@ library(ggplot2)
 source('R/p_adjust_WestfallYoung.R')
 source('R/utils.R')
 
-data_root <- "data/REANALYSIS_2023JAN04/"
+figure_dir <- "figures/JAN05_refactor/"
+data_root <- "data/REANALYSIS_2023JAN05/"
 window_type <- "OpeningWindow"
 target_type <- "low-rank-target"
 embedding_type <- "subject-embeddings"
@@ -106,57 +107,75 @@ df <- df %>%
   ungroup()
   
 # Prepare to plot ----
-cpallet <- c(
-  all_GrOWL      = "#fc8d62",
-  all_LASSO      = "#fddcce",
-  animate_GrOWL  = "#66c2a5",
-  animate_LASSO  = "#d5eee6",
-  inanimate_GrOWL = "#8da0cb",
-  inanimate_LASSO = "#8da0cb",
-  nonsig = "grey60"
+cpallet <- list(
+  fill = c(
+    all_GrOWL      = "#66c2a5",
+    all_LASSO      = "#d5eee6",
+    animate_GrOWL  = "#fc8d62",
+    animate_LASSO  = "#fddcce",
+    inanimate_GrOWL = "#8da0cb",
+    inanimate_LASSO = "lightblue",
+    nonsig_GrOWL = "grey20",
+    nonsig_LASSO = "grey80"
+  )
 )
 
 df <- df %>%
   mutate(
     cond = paste(subset, model, sep = "_"),
-    cond_sig = if_else(pval_fwer < 0.05, cond, "nonsig"),
-    across(c(metric, dimension, subset, cond, cond_sig), as.factor)
+    cond_sig_fdr = if_else(pval_fdr < 0.05, cond, paste("nonsig", model, sep = "_")),
+    cond_sig_fwer = if_else(pval_fwer < 0.05, cond, paste("nonsig", model, sep = "_")),
+    across(c(metric, dimension, subset, starts_with("cond")), as.factor)
   )
 
 pval_types <- c("fwer", "fdr")
+value_types <- c("value", "cval")
+plot_conds <- expand_grid(
+  value_type = value_types,
+  pval_type = pval_types
+)
 levels(df$subset) <- c("All", "Ani.", "Inani.")
 
 # BARPLOTS ----
-.plot <- ggplot(df, aes(x = subset, y = value, group = model, fill = cond_sig))  +
-  geom_bar(
-    stat = "identity",
-    position = position_dodge(.9),
-    color = "black",
-    linewidth = 1
-  ) + 
-  geom_errorbar(
-    aes(ymin = value - se, ymax = value + se),
-    position = position_dodge(.9),
-    linewidth = 1,
-    width = 0
-  ) + 
-  scale_fill_manual(values = cpallet) +
-  facet_wrap(~dimension) +
-  theme_bw() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    legend.position="none"
-  )
+barplotfun <- function(df, value_type, pval_type, cpallet) {
+  y <- ensym(value_type)
+  fill <- paste("cond_sig", pval_type, sep = "_")
+  fill <- ensym(fill)
+  ggplot(df, aes(x = subset, y = !!y, group = model, fill = !!fill))  +
+    geom_bar(
+      stat = "identity",
+      position = position_dodge(.9),
+      color = "black",
+      linewidth = 1
+    ) + 
+    geom_errorbar(
+      aes(ymin = !!y - se, ymax = !!y + se),
+      position = position_dodge(.9),
+      linewidth = 1,
+      width = 0
+    ) + 
+    scale_fill_manual(values = cpallet$fill) +
+    facet_wrap(~dimension) +
+    theme_bw() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.position="none"
+    )
+}
+plot_conds$.plot <- pmap(plot_conds, barplotfun, df = df, cpallet = cpallet)
 
-fig_prefix <- paste(window_type, "barplot", analysis_type, target_type, window_size, sep = "_")
-ggsave(
-  filename = paste(fig_prefix, paste("fwer", "pdf", sep = "."), sep = "_"),
-  plot = .plot,
-  device = "pdf",
-  width = 8,
-  height = 3,
-  dpi = 300,
-  units = "in",
-  bg = "white"
-)
+barplotsavefun <- function(prefix, value_type, pval_type, .plot) {
+  ggsave(
+    filename = paste(paste(prefix, value_type, pval_type, sep = "_"), ".pdf", sep = ""),
+    plot = .plot,
+    device = "pdf",
+    width = 8,
+    height = 3,
+    dpi = 300,
+    units = "in",
+    bg = "white"
+  )
+}
+fig_prefix <- file.path(figure_dir, paste(window_type, "barplot", analysis_type, window_size, sep = "_"))
+pwalk(plot_conds, barplotsavefun, prefix = fig_prefix)

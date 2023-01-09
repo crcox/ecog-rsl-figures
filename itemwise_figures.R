@@ -6,9 +6,10 @@ library(ggplot2)
 source('R/p_adjust_WestfallYoung.R')
 source('R/utils.R')
 
-data_root <- "data/REANALYSIS_2023JAN04/"
+figure_dir <- "figures/JAN05/"
+data_root <- "data/REANALYSIS_2023JAN05/"
 window_type <- "MovingWindow"
-target_type <- "low-rank-target"
+target_type <- "full-rank-target"
 embedding_type <- "subject-embeddings"
 analysis_type <- "itemwise"
 model_type <- "GrOWL"
@@ -143,7 +144,7 @@ names(plots) <- pval_types
 
 plots[["fwer"]]
 
-fig_prefix <- paste(window_type, model_type, analysis_type, target_type, sep = "_")
+fig_prefix <- file.path(figure_dir, paste(window_type, model_type, analysis_type, target_type, sep = "_"))
 iwalk(plots, function(.plot, pval_type, prefix) {
     ggsave(
       filename = paste(fig_prefix, paste(pval_type, "pdf", sep = "."), sep = "_"),
