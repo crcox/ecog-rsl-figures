@@ -113,5 +113,12 @@ df <- df %>%
 
 
 # Generate and save plots ----
-plot_conds$.plot <- pmap(plot_conds, seriesplotfun, df = df, cpallet = cpallet)
-pwalk(plot_conds, plotsavefun, outdir = figure_dir)
+plot_conds$.plot <- pmap(
+  plot_conds,
+  seriesplotfun,
+  df = df,
+  cpallet = cpallet,
+  y_breaks = c(-.3, 0, .3, .6),
+  y_limits = c(-.42, .7)
+)
+pwalk(plot_conds, plotsavefun, outdir = figure_dir, width = 8, height = 3)

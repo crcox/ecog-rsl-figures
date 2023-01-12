@@ -38,7 +38,8 @@ df <- left_join(
     group_by(across(-c(repetition, value))) %>%
     summarize(perms = list(sort(value))) %>%
     ungroup()
-)
+) %>%
+  select(-repetition)
 
 # Compute uncorrected percentile p-values.
 empirical_pvalue <- function(x, p) {
@@ -56,7 +57,8 @@ cscore <- function(x, p) {
 
 df <- df %>%
   mutate(
-    se = map_dbl(perms, sd),
+    #se = map_dbl(perms, sd),
+    se = std / sqrt(10),
     pval = map2_dbl(value, perms, empirical_pvalue),
     zval = map2_dbl(value, perms, zscore),
     cval = map2_dbl(value, perms, cscore)
@@ -69,7 +71,7 @@ df <- df %>%
 # See also: https://dx.doi.org/10.4310/SII.2013.v6.n1.a8
   # group_by(metric, domain) %>%
 df <- df %>%
-  group_by(across(-c(WindowStart, WindowSize, subset, value, std, se, zval, cval, pval, perms))) %>%
+  group_by(across(-c(WindowStart, WindowSize, domain, value, std, se, zval, cval, pval, perms))) %>%
   mutate(
     pval_fdr = p.adjust(pval, method = "BH"),
     pval_fwer = p_adjust_WestfallYoung(value, matrix(unlist(perms), ncol = n()))
@@ -77,53 +79,57 @@ df <- df %>%
   ungroup()
   
   
-df <- df %>%
-  mutate(
-    cond = paste(domain, subset, sep = "_"),
-    across(c(metric, domain, subset, cond), as.factor)
-  )
-
 # Prepare to plot ----
 tmp <- map(data_conds %>% select(-data_root), unique)
-tmp$value_type <- c("value", "cval")
+tmp$value_type <- c("cval")
 tmp$pval_type <- c("fwer", "fdr")
 plot_conds <- do.call(expand_grid, tmp)
+
 
 cpallet <- list(
   color = c(
     all              = "#000000",
-    animate          = "#000000",
-    inanimate        = "#000000",
+    within           = "#000000",
+    between          = "#000000",
+    RSA              = "#000000",
     nonsig_all       = "#66c2a5",
-    nonsig_animate   = "#fc8d62",
-    nonsig_inanimate = "#8da0cb"
+    nonsig_within    = "#fc8d62",
+    nonsig_between   = "#8da0cb",
+    nonsig_RSA       = "grey80"
   ),
   fill = c(
     all              = "#66c2a5",
-    animate          = "#fc8d62",
-    inanimate        = "#8da0cb",
+    within           = "#fc8d62",
+    between          = "#8da0cb",
+    RSA              = "grey80",
     nonsig_all       = "#ffffff",
-    nonsig_animate   = "#ffffff",
-    nonsig_inanimate = "#ffffff"
+    nonsig_within    = "#ffffff",
+    nonsig_between   = "#ffffff",
+    nonsig_RSA       = "#ffffff"
   )
 )
 
 df <- df %>%
   mutate(
-    subset_fdr = if_else(pval_fdr < 0.05, subset, paste("nonsig", subset, sep = "_")),
-    subset_fwer = if_else(pval_fwer < 0.05, subset, paste("nonsig", subset, sep = "_")),
-    across(c(metric, dimension, starts_with("subset")), as.factor)
+    domain_fdr = if_else(pval_fdr < 0.05, as.character(domain), paste("nonsig", domain, sep = "_")),
+    domain_fwer = if_else(pval_fwer < 0.05, as.character(domain), paste("nonsig", domain, sep = "_")),
+    across(c(metric, subset, domain), as.factor),
+    across(c(starts_with("domain_")), factor, levels = names(cpallet$color))
   )
 
-cpallet <- c(
-  all = "black",
-  within = "red",
-  between = "green",
-  RSA = "grey80"
+plot_conds$.plot <- NULL
+plot_conds$.plot <- pmap(
+  plot_conds,
+  seriesplotfun,
+  df = df,
+  cpallet = cpallet,
+  group_var = "domain",
+  facet_var = "subset",
+  y_breaks = c(-0.1, 0.0, 0.1, 0.2, 0.3, 0.4),
+  x_breaks = c(-0.1, 0.0, 0.1, 0.2, 0.3, 0.4),
+  limits = NULL
 )
-
-df <- left_join(df, tibble(domain = names(cpallet), color = cpallet))
-
+pwalk(plot_conds, plotsavefun, outdir = figure_dir, width = 8, height = 4)
 
 pval_types <- c("fwer", "fdr")
 plots <- map(pval_types, function(df, pval_type) {
