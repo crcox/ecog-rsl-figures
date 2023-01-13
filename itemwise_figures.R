@@ -125,46 +125,9 @@ plot_conds$.plot <- pmap(
   cpallet = cpallet,
   group_var = "domain",
   facet_var = "subset",
+  x_breaks = c(0,200,400,600,800,1000),
   y_breaks = c(-0.1, 0.0, 0.1, 0.2, 0.3, 0.4),
-  x_breaks = c(-0.1, 0.0, 0.1, 0.2, 0.3, 0.4),
-  limits = NULL
+  x_limits = c(0, 1000),
+  y_limits = NULL
 )
 pwalk(plot_conds, plotsavefun, outdir = figure_dir, width = 8, height = 4)
-
-pval_types <- c("fwer", "fdr")
-plots <- map(pval_types, function(df, pval_type) {
-    pval_var <- paste("pval", pval_type, sep = "_")
-    ggplot(df, aes(x = WindowStart, y = value, group = domain)) +
-      geom_ribbon(aes(ymin = value - se, ymax = value + se, group = domain), alpha = 0.2, color = NA) +
-      geom_line() +
-      geom_point(
-        fill = ifelse(df[[pval_var]] < .05, df$color, "white"),
-        color =  ifelse(df[[pval_var]] >= .05, df$color, "black"),
-        shape = 21,
-        size = 2.5
-      ) +
-      geom_hline(yintercept = 0, linetype = 2) +
-      scale_fill_manual(values = cpallet) +
-      facet_wrap(~subset) +
-      theme_bw() +
-      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-  }, df = df %>% filter(model_type == "GrOWL", target_type == "low-rank-target")
-)
-names(plots) <- pval_types
-
-plots[["fdr"]]
-
-fig_prefix <- file.path(figure_dir, paste(window_type, model_type, analysis_type, target_type, sep = "_"))
-iwalk(plots, function(.plot, pval_type, prefix) {
-    ggsave(
-      filename = paste(fig_prefix, paste(pval_type, "pdf", sep = "."), sep = "_"),
-      plot = .plot,
-      device = "pdf",
-      width = 8,
-      height = 3,
-      dpi = 300,
-      units = "in",
-      bg = "white"
-    )
-  }, prefix = fig_prefix
-)

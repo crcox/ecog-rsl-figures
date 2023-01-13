@@ -8,7 +8,7 @@ source("R/read_results.R")
 source("R/barplotfun.R")
 source("R/plotsavefun.R")
 
-figure_dir <- "figures/JAN09_refactor/"
+figure_dir <- "figures/JAN13"
 data_conds <- expand_grid(
   data_root = "data/REANALYSIS_2023JAN05",
   window_type = "OpeningWindow",
@@ -57,7 +57,8 @@ cscore <- function(x, p) {
 
 df <- df %>%
   mutate(
-    se = map_dbl(perms, sd),
+    #se = map_dbl(perms, sd),
+    se = std / sqrt(10),
     pval = map2_dbl(value, perms, empirical_pvalue),
     zval = map2_dbl(value, perms, zscore),
     cval = map2_dbl(value, perms, cscore)
@@ -106,4 +107,10 @@ df <- df %>%
 
 # Generate and save plots ----
 plot_conds$.plot <- pmap(plot_conds, barplotfun, df = df, cpallet = cpallet)
-pwalk(plot_conds, plotsavefun, outdir = file.path(figure_dir, "barplots"))
+pwalk(
+  plot_conds,
+  plotsavefun,
+  outdir = file.path(figure_dir, "barplots"),
+  width = 8,
+  height = 3
+)

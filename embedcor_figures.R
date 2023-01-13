@@ -10,10 +10,10 @@ source("R/read_results.R")
 source("R/seriesplotfun.R")
 source("R/plotsavefun.R")
 
-figure_dir <- "figures/JAN09_refactor/"
+figure_dir <- "figures/JAN13"
 data_conds <- expand_grid(
   data_root = "data/REANALYSIS_2023JAN05",
-  window_type = c("OpeningWindow", "MovingWindow"),
+  window_type = c("OpeningWindow"),
   model_type = c("GrOWL", "LASSO"),
   target_type = "low-rank-target",
   embedding_type = "subject-embeddings",
@@ -60,7 +60,8 @@ cscore <- function(x, p) {
 
 df <- df %>%
   mutate(
-    se = map_dbl(perms, sd),
+    #se = map_dbl(perms, sd),
+    se = std / sqrt(10),
     pval = map2_dbl(value, perms, empirical_pvalue),
     zval = map2_dbl(value, perms, zscore),
     cval = map2_dbl(value, perms, cscore)
@@ -82,8 +83,8 @@ df <- df %>%
 
 # Prepare to plot ----
 tmp <- map(data_conds %>% select(-data_root), unique)
-tmp$value_type <- c("value", "cval")
-tmp$pval_type <- c("fwer", "fdr")
+tmp$value_type <- c("cval", "value")
+tmp$pval_type <- c("fdr", "fwer")
 plot_conds <- do.call(expand_grid, tmp)
 
 cpallet <- list(
@@ -111,14 +112,36 @@ df <- df %>%
     across(c(metric, dimension, starts_with("subset")), as.factor)
   )
 
+# VALUE y_limits = c(-0.49, 0.72)
+# CVAL y_limits  = c(-0.15, 0.67)
+ylims <- tibble(
+  value_type = c("value", "cval"),
+  y_limits = list(
+    value = c(-0.49, 0.72),
+    cval = c(-0.15, 0.67)
+  ),
+  y_breaks = list(
+    value = c(-.4, -.2, 0, .2, .4, .6, .8),
+    cval = c(0, .2, .4, .6)
+  )
+)
+plot_conds <- left_join(plot_conds, ylims)
 
 # Generate and save plots ----
+plot_conds$.plot <- NULL
 plot_conds$.plot <- pmap(
   plot_conds,
   seriesplotfun,
   df = df,
-  cpallet = cpallet,
-  y_breaks = c(-.3, 0, .3, .6),
-  y_limits = c(-.42, .7)
+  group_var = "subset",
+  facet_var = "dimension",
+  x_breaks = c(0, 200, 400, 600, 800, 1000),
+  cpallet = cpallet
 )
-pwalk(plot_conds, plotsavefun, outdir = figure_dir, width = 8, height = 3)
+pwalk(
+  plot_conds %>% select(-ends_with("_limits"), -ends_with("_breaks")),
+  plotsavefun,
+  outdir = figure_dir,
+  width = 8,
+  height = 3
+)

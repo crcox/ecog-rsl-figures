@@ -1,9 +1,10 @@
-seriesplotfun <- function(df, window_type, value_type, pval_type, group_var, facet_var, cpallet, x_breaks = NULL, y_breaks = NULL, y_limits = NULL, ...) {
+seriesplotfun <- function(df, window_type, value_type, pval_type, group_var, facet_var, cpallet, x_breaks = waiver(), y_breaks = waiver(), x_limits = NULL, y_limits = NULL, ...) {
   y <- ensym(value_type)
   group_sig <- paste(group_var, pval_type, sep = "_")
   group_sig <- ensym(group_sig)
   group_var <- ensym(group_var)
   window_var <- switch(window_type, OpeningWindow = "WindowSize", MovingWindow = "WindowStart")
+  x_label <- switch(window_type, OpeningWindow = "Window size (ms)", MovingWindow = "time from stimulus onset (ms)")
   window_var <- ensym(window_var)
   facet_var <- ensym(facet_var)
   tmp <- df %>%
@@ -15,7 +16,8 @@ seriesplotfun <- function(df, window_type, value_type, pval_type, group_var, fac
     geom_hline(yintercept = 0, linetype = 2) +
     scale_color_manual(values = cpallet$color) +
     scale_fill_manual(values = cpallet$fill) +
-    scale_y_continuous("Pearson's r", breaks = y_breaks, limits = limits) +
+    scale_x_continuous(x_label, breaks = unlist(x_breaks), limits = unlist(x_limits)) +
+    scale_y_continuous("Pearson's r", breaks = unlist(y_breaks), limits = unlist(y_limits)) +
     facet_wrap(facet_var) +
     theme_bw() +
     theme(
