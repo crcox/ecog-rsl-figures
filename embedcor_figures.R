@@ -12,12 +12,12 @@ source("R/plotsavefun.R")
 
 figure_dir <- "figures/JAN09_refactor/"
 data_conds <- expand_grid(
-  data_root = "data/REANALYSIS_2023JAN05",
+  data_root = "data/REANALYSIS_2023JAN11",
   window_type = c("OpeningWindow", "MovingWindow"),
   model_type = c("GrOWL", "LASSO"),
   target_type = "low-rank-target",
   embedding_type = "subject-embeddings",
-  analysis_type = "embedcor"
+  analysis_type = "embedcor_cv"
 )
 
 
@@ -114,4 +114,4 @@ df <- df %>%
 
 # Generate and save plots ----
 plot_conds$.plot <- pmap(plot_conds, seriesplotfun, df = df, cpallet = cpallet)
-pwalk(plot_conds, plotsavefun, outdir = figure_dir)
+pwalk(plot_conds, plotsavefun, outdir = file.path(figure_dir, "cv"))
