@@ -17,7 +17,7 @@ data_conds <- expand_grid(
   model_type = c("GrOWL", "LASSO"),
   target_type = "low-rank-target",
   embedding_type = "subject-embeddings",
-  analysis_type = "embedcor_cv"
+  analysis_type = "embedcor"
 )
 
 
@@ -69,7 +69,7 @@ df <- df %>%
 
 # Compute adjusted p-values. The Westfall-Young procedure is specifically
 # designed for cases such as this where we have the simulated null distributions
-# stored, and is preferred.
+# stored.
 # Recent review in neuroimaging context: https://doi.org/10.1016/j.neuroimage.2020.116760
 # See also: https://dx.doi.org/10.4310/SII.2013.v6.n1.a8
 df <- df %>%
