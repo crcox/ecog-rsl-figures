@@ -1,3 +1,10 @@
+# Generate figures showing mean item-wise correlations, obtained by
+# reconstructing a predicted similarity matrix from the predicted embeddings.
+# The data are plotted within 100-ms moving windows. Performance along each
+# semantic component is separated by panel. Only GrOWL performance is plotted in
+# the paper. Comparisons relative to a low-rank and full-rank target matrix are
+# plotted as separate figures.
+
 library(dplyr)
 library(purrr)
 library(readr)
@@ -9,9 +16,10 @@ source("R/seriesplotfun.R")
 source("R/plotsavefun.R")
 
 
-figure_dir <- "figures/JAN09_refactor/"
+n_subj <- 10
+figure_dir <- "figures"
 data_conds = expand_grid(
-  data_root = "data/REANALYSIS_2023JAN05",
+  data_root = "results",
   window_type = "MovingWindow",
   model_type = "GrOWL",
   target_type = c("low-rank-target", "full-rank-target"),
@@ -57,8 +65,7 @@ cscore <- function(x, p) {
 
 df <- df %>%
   mutate(
-    #se = map_dbl(perms, sd),
-    se = std / sqrt(10),
+    se = std / sqrt(n_subj),
     pval = map2_dbl(value, perms, empirical_pvalue),
     zval = map2_dbl(value, perms, zscore),
     cval = map2_dbl(value, perms, cscore)
@@ -125,7 +132,7 @@ plot_conds$.plot <- pmap(
   cpallet = cpallet,
   group_var = "domain",
   facet_var = "subset",
-  x_breaks = c(0,200,400,600,800,1000),
+  x_breaks = c(0, 200, 400, 600, 800, 1000),
   y_breaks = c(-0.1, 0.0, 0.1, 0.2, 0.3, 0.4),
   x_limits = c(0, 1000),
   y_limits = NULL
