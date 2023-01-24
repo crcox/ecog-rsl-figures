@@ -1,10 +1,12 @@
 read_results <- function(result_type, analysis_type, ...) {
     value_prefix <- switch(analysis_type,
+           embedcor_cv = "embedcor",
            embedcor = "embedcor",
            itemwise = "itemcor",
            fullmat = "fullcor"
     )
     names_to <- switch(analysis_type,
+           embedcor_cv = c("metric", "subset", "stat", "dimension"),
            embedcor = c("metric", "subset", "stat", "dimension"),
            itemwise = c("metric", "domain", "subset", "stat"),
            fullmat = c("metric", "subset", "stat")

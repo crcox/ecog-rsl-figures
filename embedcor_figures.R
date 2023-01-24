@@ -1,4 +1,7 @@
-# Generate figure for opening window analysis of the itemwise data
+# Generate line plots showing model performance over increasingly large
+# windows of time anchored at stimulus onset. Performance is displayed in
+# separate panels by semantic component and in separate figures by model (GrOWL
+# of LASSO).
 
 library(dplyr)
 library(purrr)
@@ -10,9 +13,11 @@ source("R/read_results.R")
 source("R/seriesplotfun.R")
 source("R/plotsavefun.R")
 
-figure_dir <- "figures/JAN13"
+
+n_subj <- 10
+figure_dir <- "figures"
 data_conds <- expand_grid(
-  data_root = "data/REANALYSIS_2023JAN05",
+  data_root = "results",
   window_type = c("OpeningWindow"),
   model_type = c("GrOWL", "LASSO"),
   target_type = "low-rank-target",
@@ -26,7 +31,7 @@ data_conds <- expand_grid(
 # final results, and the other containing all the values obtained by repeated
 # random permutation of the rows of the target embedding before model fitting.
 R <- map(c(final = "final", perms = "perm"), function(.data, result_type) {
-  pmap_dfr(.data, read_results, result_type = result_type) 
+  pmap_dfr(.data, read_results, result_type = result_type)
 }, .data = data_conds)
 
 
@@ -60,8 +65,7 @@ cscore <- function(x, p) {
 
 df <- df %>%
   mutate(
-    #se = map_dbl(perms, sd),
-    se = std / sqrt(10),
+    se = std / sqrt(n_subj),
     pval = map2_dbl(value, perms, empirical_pvalue),
     zval = map2_dbl(value, perms, zscore),
     cval = map2_dbl(value, perms, cscore)
@@ -69,7 +73,7 @@ df <- df %>%
 
 # Compute adjusted p-values. The Westfall-Young procedure is specifically
 # designed for cases such as this where we have the simulated null distributions
-# stored, and is preferred.
+# stored.
 # Recent review in neuroimaging context: https://doi.org/10.1016/j.neuroimage.2020.116760
 # See also: https://dx.doi.org/10.4310/SII.2013.v6.n1.a8
 df <- df %>%
@@ -112,8 +116,6 @@ df <- df %>%
     across(c(metric, dimension, starts_with("subset")), as.factor)
   )
 
-# VALUE y_limits = c(-0.49, 0.72)
-# CVAL y_limits  = c(-0.15, 0.67)
 ylims <- tibble(
   value_type = c("value", "cval"),
   y_limits = list(

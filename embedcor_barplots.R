@@ -1,16 +1,20 @@
+# Generate barplots that compare LASSO and GrOWL performance across three
+# semantic components. The performance is taken from the 1000-ms window.
+
 library(dplyr)
 library(purrr)
 library(readr)
 library(tidyr)
 library(ggplot2)
-source('R/p_adjust_WestfallYoung.R')
+source("R/p_adjust_WestfallYoung.R")
 source("R/read_results.R")
 source("R/barplotfun.R")
 source("R/plotsavefun.R")
 
-figure_dir <- "figures/JAN13"
+n_subj <- 10
+figure_dir <- "figures"
 data_conds <- expand_grid(
-  data_root = "data/REANALYSIS_2023JAN05",
+  data_root = "results",
   window_type = "OpeningWindow",
   model_type = c("GrOWL", "LASSO"),
   target_type = "low-rank-target",
@@ -57,8 +61,7 @@ cscore <- function(x, p) {
 
 df <- df %>%
   mutate(
-    #se = map_dbl(perms, sd),
-    se = std / sqrt(10),
+    se = std / sqrt(n_subj),
     pval = map2_dbl(value, perms, empirical_pvalue),
     zval = map2_dbl(value, perms, zscore),
     cval = map2_dbl(value, perms, cscore)
